@@ -2,13 +2,17 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
+	"syscall"
 	"time"
 
+	log "github.com/segmentio/go-log"
+	"github.com/teambition/confl"
 	"github.com/teambition/gear"
 	"github.com/teambition/gear/logging"
 	"github.com/teambition/gear/middleware/favicon"
@@ -16,9 +20,7 @@ import (
 )
 
 var (
-	portReg  = regexp.MustCompile(`^\d+$`)
-	port     = flag.String("port", "8080", `Server port.`)
-	dataPath = flag.String("data", "", "IP data file path.")
+	portReg = regexp.MustCompile(`^\d+$`)
 )
 
 type result struct {
@@ -55,6 +57,12 @@ func jsonAPI(ctx *gear.Context) error {
 		return ctx.JSON(res.Status, res)
 	}
 	return ctx.JSONP(res.Status, callback, res)
+
+}
+
+type config struct {
+	DataPath string `json:"data_path"`
+	Port     string `json:"port"`
 }
 
 func app(port, dataPath string) *gear.ServerListener {
@@ -100,15 +108,50 @@ func app(port, dataPath string) *gear.ServerListener {
 	return app.Start(port)
 }
 
-func main() {
-	flag.Parse()
-	if portReg.MatchString(*port) {
-		*port = ":" + *port
+func checkPort(port string) string {
+	if portReg.MatchString(port) {
+		return ":" + port
 	}
-	if *port == "" || *dataPath == "" {
-		flag.PrintDefaults()
+	return port
+}
+
+func main() {
+	var srv *gear.ServerListener
+	c := &config{}
+
+	watcher, err := confl.NewFromEnv(c, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	if c.Port == "" || c.DataPath == "" {
 		os.Exit(1)
 	}
-	srv := app(*port, *dataPath)
-	srv.Wait()
+
+	watcher.AddHook(func(c interface{}) {
+		if cfg, ok := c.(*config); ok {
+			if cfg.Port == "" || cfg.DataPath == "" {
+				return
+			}
+			if srv != nil {
+				srv.Close()
+			}
+			srv = app(checkPort(cfg.Port), cfg.DataPath)
+		}
+	})
+
+	go watcher.GoWatch()
+
+	srv = app(checkPort(c.Port), c.DataPath)
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	for {
+		select {
+		case s := <-signalChan:
+			log.Info(fmt.Sprintf("Captured %v. Exiting...", s))
+			watcher.Close()
+			os.Exit(0)
+		}
+	}
 }
