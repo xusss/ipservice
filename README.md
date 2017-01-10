@@ -4,31 +4,21 @@ IP Service
 
 ## 运行
 
-### 从 docker 官方仓库抓取 image 运行
-```sh
-docker run --rm -p 8080:8080 zensh/ipservice
-```
-
 ### 从源码运行
 
 ```bash
-go get github.com/zensh/ipservice
+go get github.com/xusss/ipservice
 cd path_to_ipservice
-go run app.go --data=./data/17monipdb.dat
-```
 
-### 编译可执行文件并运行
+# set env
+export CONFL_VAULT_TOKEN=06900225-b34b-69de-7872-21a2c8b52306
+export VAULT_ADDR='http://127.0.0.1:8200'
+export CONFL_CONF_PATH=/confl/test2
+export CONFL_VAULT_ADDRESS=http://localhost:8200
+export CONFL_VAULT_AUTH_TYPE=token
+export CONFL_ETCD_CLUSTERS=http://localhost:2379
 
-```bash
-# 编译成可运行的二进制文件：ipservice
-go build -o ipservice app.go
-
-# 未提供参数显示帮助信息
-./ipservice
-# 指定 IP 数据库
-./ipservice -data ./data/17monipdb.dat
-# 指定 IP 数据库并指定监听端口
-./ipservice -data ./data/17monipdb.dat -port 3000
+go run app.go
 ```
 
 ### Docker (15.01 MB)
